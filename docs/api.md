@@ -35,6 +35,25 @@ curl -H "X-API-Key: <your_api_key>" \
 
 ---
 
+## Getting Started: Purchase a Challenge
+
+Before you can trade via the API, you need an active challenge. A challenge gives you a funded trading account with specific rules (max drawdown, daily loss limits, leverage caps). Here's how to get one:
+
+1. Create an account at [app.propr.xyz](https://app.propr.xyz) (Google sign in)
+2. Go to [app.propr.xyz/dashboard](https://app.propr.xyz/dashboard)
+3. Browse available challenges (different account sizes, durations, and rules)
+4. Click **Get Started** on the challenge you want
+5. Complete the Stripe checkout to purchase
+6. Once purchased, your challenge attempt is created with a linked `accountId`
+
+You can also list available challenges programmatically via `GET /challenges` (no auth required) to see pricing, rules, and configuration before purchasing through the app.
+
+After purchase, retrieve your `accountId` via `GET /challenge-attempts?status=active`. This account ID is required for all trading endpoints (`/accounts/{accountId}/orders`, `/accounts/{accountId}/positions`, etc.).
+
+> Each challenge attempt creates a new trading account. If you fail a challenge and purchase again, you'll get a new `accountId`.
+
+---
+
 ## Health Check (No Auth)
 
 Always check health before trading. No authentication required.
