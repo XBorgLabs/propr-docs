@@ -137,7 +137,7 @@ All trading endpoints follow the pattern `/accounts/{accountId}/...` and require
       "positionSide": "long",
       "productType": "perp",
       "timeInForce": "GTC",
-      "asset": "BTC/USDC",
+      "asset": "BTC",
       "base": "BTC",
       "quote": "USDC",
       "quantity": "0.001",
@@ -150,6 +150,46 @@ All trading endpoints follow the pattern `/accounts/{accountId}/...` and require
 ```
 
 > **Important:** `intentId` must be a unique ULID you generate per order. Same intentId = idempotent (same order won't be placed twice).
+
+> **Asset format:** Use the symbol only (e.g. `"BTC"`, `"ETH"`, `"SOL"`), not the pair. Passing `"BTC/USDC"` will return `13450 EXCHANGE_ASSET_NOT_FOUND`. See the [Available Assets](#available-assets) table for the full list. For HIP-3 assets, include the `xyz:` prefix (e.g. `"xyz:AAPL"`).
+
+### Batching and Conditional Order Rules
+
+A few request-shape rules that are enforced server side:
+
+| Rule | When it applies | Error code |
+|------|-----------------|------------|
+| Top-level `orderGroupId` is required | `orders.length > 1` | `13059 ORDER_VALIDATION_GROUP_ID_REQUIRED` |
+| Conditional orders (`stop_market`, `stop_limit`, `take_profit_market`, `take_profit_limit`) need a `positionId` on the order, OR must be in the same group as an entry order | Standalone conditional, or group with no entry order | `13056 CONDITIONAL_ORDER_REQUIRES_POSITION_OR_GROUP` |
+| Only one entry order (`market`, `limit`) per request | Multiple entries in one `orders` array | `13066 MULTIPLE_ENTRY_ORDERS` |
+| `orderGroupId` must be a valid ULID you generate | Provided but malformed | `13061 INVALID_GROUP_ID` |
+
+**Attaching SL/TP to an open position** (the common case for bots):
+
+```json
+{
+  "orders": [
+    {
+      "intentId": "01K...",
+      "positionId": "urn:prp-position:...",
+      "type": "stop_market",
+      "side": "sell",
+      "positionSide": "long",
+      "asset": "BTC",
+      "base": "BTC",
+      "quote": "USDC",
+      "quantity": "0.001",
+      "triggerPrice": "90000",
+      "reduceOnly": true,
+      "exchange": "hyperliquid",
+      "productType": "perp",
+      "timeInForce": "GTC"
+    }
+  ]
+}
+```
+
+Single order, no `orderGroupId` needed. Partial-quantity laddered SL/TP on the same position is supported: submit each leg as its own request (or batch them under one `orderGroupId`).
 
 ### Create Order Response (201)
 
@@ -166,7 +206,7 @@ All trading endpoints follow the pattern `/accounts/{accountId}/...` and require
       "positionId": null,
       "exchange": "hyperliquid",
       "productType": "perp",
-      "asset": "BTC/USDC",
+      "asset": "BTC",
       "base": "BTC",
       "quote": "USDC",
       "type": "limit",
@@ -336,7 +376,7 @@ To fully close a position:
       "exchange": "hyperliquid",
       "productType": "perp",
       "status": "open",
-      "asset": "BTC/USDC",
+      "asset": "BTC",
       "base": "BTC",
       "quote": "USDC",
       "positionSide": "long",
@@ -396,7 +436,7 @@ Execution history for your account.
       "productType": "perp",
       "type": "reduce",
       "liquidityType": "taker",
-      "asset": "BTC/USDC",
+      "asset": "BTC",
       "base": "BTC",
       "quote": "USDC",
       "side": "sell",
