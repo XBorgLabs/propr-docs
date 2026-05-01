@@ -109,7 +109,7 @@ Your challenge progress. Your `accountId` (needed for all trading endpoints) is 
 
 Response includes: status, total profit/loss, win rate, max drawdown, trading days, failure reason, linked accountId, current phase.
 
-**Failure reasons:** `max_drawdown_hit`, `max_daily_loss_hit`, `min_trades_not_met`, `min_trading_days_not_met`, `profit_target_not_met`
+**Failure reasons:** `max_drawdown_exceeded`, `max_daily_loss_exceeded`, `profit_target_not_met`
 
 ---
 
