@@ -12,7 +12,7 @@ Usage:
 
 import os
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from ulid import ULID
 
 import requests
@@ -21,6 +21,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 __version__ = "0.1.0"
+
+ChallengeAttemptStatus = Literal["active", "passed", "failed"]
+ChallengeFailureReason = Literal[
+    "max_drawdown_exceeded",
+    "max_daily_loss_exceeded",
+    "profit_target_not_met",
+]
+PhaseAttemptStatus = Literal["active", "not_started", "passed", "failed"]
 
 
 class ProprAPIError(Exception):
@@ -214,7 +222,7 @@ class ProprClient:
         self,
         attempt_id: str | None = None,
         challenge_id: str | None = None,
-        status: str | None = None,
+        status: ChallengeAttemptStatus | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict]:
@@ -224,12 +232,13 @@ class ProprClient:
         Args:
             attempt_id: Filter by attempt ID.
             challenge_id: Filter by challenge ID.
-            status: Filter by status (active, passed, failed).
+            status: Filter by status. One of: "active", "passed", "failed".
             limit: Results per page.
             offset: Pagination offset.
 
         Returns:
             List of attempt dicts with accountId, status, profit, etc.
+            attempt["status"] is always one of "active", "passed", or "failed".
         """
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if attempt_id:
@@ -325,7 +334,8 @@ class ProprClient:
             position_side: Position side ("long" or "short").
             order_type: One of "market", "limit", "stop_market", "stop_limit",
                         "take_profit_market", "take_profit_limit".
-            asset: Trading pair (e.g. "BTC/USDC").
+            asset: Base asset symbol (e.g. "BTC"). Must match `base` — the
+                pair format "BTC/USDC" is rejected with EXCHANGE_ASSET_NOT_FOUND.
             base: Base asset (e.g. "BTC").
             quote: Quote asset (e.g. "USDC").
             quantity: Order quantity as string.
@@ -448,7 +458,7 @@ class ProprClient:
 
         Args:
             position_id: Filter by position ID.
-            asset: Filter by asset pair (e.g. "BTC/USDC").
+            asset: Filter by base asset symbol (e.g. "BTC").
             base: Filter by base asset (e.g. "BTC").
             quote: Filter by quote asset (e.g. "USDC").
             position_side: Filter by side ("long" or "short").
@@ -628,7 +638,7 @@ class ProprClient:
             side="buy",
             position_side="long",
             order_type="market",
-            asset=f"{base}/{quote}",
+            asset=base,
             base=base,
             quote=quote,
             quantity=quantity,
@@ -657,7 +667,7 @@ class ProprClient:
             side="sell",
             position_side="long",
             order_type="market",
-            asset=f"{base}/{quote}",
+            asset=base,
             base=base,
             quote=quote,
             quantity=quantity,
@@ -687,7 +697,7 @@ class ProprClient:
             side="buy",
             position_side="long",
             order_type="limit",
-            asset=f"{base}/{quote}",
+            asset=base,
             base=base,
             quote=quote,
             quantity=quantity,
@@ -719,7 +729,7 @@ class ProprClient:
             side="sell",
             position_side="long",
             order_type="limit",
-            asset=f"{base}/{quote}",
+            asset=base,
             base=base,
             quote=quote,
             quantity=quantity,
@@ -751,7 +761,7 @@ class ProprClient:
             side=close_side,
             position_side=pos["positionSide"],
             order_type="market",
-            asset=f"{base}/{quote}",
+            asset=base,
             base=base,
             quote=quote,
             quantity=pos["quantity"],

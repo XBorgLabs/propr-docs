@@ -138,6 +138,47 @@ export interface LeverageLimits {
   overrides: Record<string, number>;
 }
 
+export type ChallengeAttemptStatus = 'active' | 'passed' | 'failed';
+export type ChallengeFailureReason =
+  | 'max_drawdown_exceeded'
+  | 'max_daily_loss_exceeded'
+  | 'profit_target_not_met';
+export type PhaseAttemptStatus = 'active' | 'not_started' | 'passed' | 'failed';
+
+export interface ChallengeAttemptPhase {
+  attemptPhaseId: string;
+  attemptId: string;
+  phaseId: string;
+  order: number;
+  status: PhaseAttemptStatus;
+  startingBalance: string;
+  endingBalance: string | null;
+  failureReason: ChallengeFailureReason | null;
+  failureDetails: Record<string, any> | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChallengeAttempt {
+  attemptId: string;
+  userId: string;
+  purchaseId: string;
+  challengeId: string;
+  accountId: string;
+  currentPhaseId: string | null;
+  status: ChallengeAttemptStatus;
+  failureReason: ChallengeFailureReason | null;
+  failureDetails: Record<string, any> | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  phases?: ChallengeAttemptPhase[];
+  currentPhase?: ChallengeAttemptPhase;
+}
+
 export interface CreateOrderParams {
   side: 'buy' | 'sell';
   positionSide: 'long' | 'short';
@@ -324,11 +365,11 @@ export class ProprClient {
   async getChallengeAttempts(params: {
     attemptId?: string;
     challengeId?: string;
-    status?: string;
+    status?: ChallengeAttemptStatus;
     limit?: number;
     offset?: number;
-  } = {}): Promise<any[]> {
-    const res = await this.get<{ data: any[] }>('/challenge-attempts', {
+  } = {}): Promise<ChallengeAttempt[]> {
+    const res = await this.get<{ data: ChallengeAttempt[] }>('/challenge-attempts', {
       limit: 20,
       offset: 0,
       ...params,
@@ -336,8 +377,8 @@ export class ProprClient {
     return res.data ?? [];
   }
 
-  async getChallengeAttempt(attemptId: string): Promise<any> {
-    return this.get(`/challenge-attempts/${attemptId}`);
+  async getChallengeAttempt(attemptId: string): Promise<ChallengeAttempt> {
+    return this.get<ChallengeAttempt>(`/challenge-attempts/${attemptId}`);
   }
 
   // ── Orders ──
@@ -516,7 +557,7 @@ export class ProprClient {
       side: 'buy',
       positionSide: 'long',
       orderType: 'market',
-      asset: `${base}/${quote}`,
+      asset: base,
       base,
       quote,
       quantity,
@@ -533,7 +574,7 @@ export class ProprClient {
       side: 'sell',
       positionSide: 'long',
       orderType: 'market',
-      asset: `${base}/${quote}`,
+      asset: base,
       base,
       quote,
       quantity,
@@ -551,7 +592,7 @@ export class ProprClient {
       side: 'buy',
       positionSide: 'long',
       orderType: 'limit',
-      asset: `${base}/${quote}`,
+      asset: base,
       base,
       quote,
       quantity,
@@ -570,7 +611,7 @@ export class ProprClient {
       side: 'sell',
       positionSide: 'long',
       orderType: 'limit',
-      asset: `${base}/${quote}`,
+      asset: base,
       base,
       quote,
       quantity,
@@ -590,7 +631,7 @@ export class ProprClient {
       side: closeSide as 'buy' | 'sell',
       positionSide: pos.positionSide as 'long' | 'short',
       orderType: 'market',
-      asset: `${base}/${quote}`,
+      asset: base,
       base,
       quote,
       quantity: pos.quantity,
