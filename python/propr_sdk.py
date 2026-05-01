@@ -30,6 +30,16 @@ ChallengeFailureReason = Literal[
 ]
 PhaseAttemptStatus = Literal["active", "not_started", "passed", "failed"]
 
+AccountType = Literal["paper", "a_book", "b_book"]
+BookAccountIssuanceStatus = Literal["active", "closed", "review_pending"]
+BookAccountClosureReason = Literal[
+    "max_drawdown_exceeded",
+    "max_daily_loss_exceeded",
+    "admin_closure",
+    "manipulation_detected",
+]
+DrawdownType = Literal["static", "trailing"]
+
 
 class ProprAPIError(Exception):
     """Raised when the Propr API returns an error response."""
@@ -129,8 +139,10 @@ class ProprClient:
         """
         Initialize the client with an account ID.
 
-        If account_id is provided, uses that directly. Otherwise, fetches
-        the first active challenge attempt and extracts its accountId.
+        If account_id is provided, uses that directly. Otherwise tries
+        active funded accounts first, then falls back to active challenge
+        attempts. Funded accounts take priority because once a trader is
+        funded they typically trade through that account, not a challenge.
 
         Returns:
             The account ID being used.
@@ -139,11 +151,17 @@ class ProprClient:
             self.account_id = account_id
             return self.account_id
 
+        issuances = self.get_book_account_issuances(status="active")
+        if issuances:
+            self.account_id = issuances[0]["accountId"]
+            return self.account_id
+
         attempts = self.get_challenge_attempts(status="active")
         if not attempts:
             raise Exception(
-                "No active challenge found. Purchase a challenge at "
-                "https://app.propr.xyz/dashboard first."
+                "No tradeable account found. Purchase a challenge at "
+                "https://app.propr.xyz/dashboard, or wait for a funded "
+                "account to be issued after passing."
             )
         self.account_id = attempts[0]["accountId"]
         return self.account_id
@@ -261,6 +279,71 @@ class ProprClient:
             Attempt dict.
         """
         return self._get(f"/challenge-attempts/{attempt_id}")
+
+    # ── Funded Accounts (book account issuances) ──
+
+    def get_book_account_issuances(
+        self,
+        issuance_id: str | None = None,
+        account_id: str | None = None,
+        spec_id: str | None = None,
+        status: BookAccountIssuanceStatus | None = None,
+        closure_reason: BookAccountClosureReason | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict]:
+        """
+        List the caller's funded accounts (b_book / a_book).
+
+        Funded accounts are issued after passing a challenge. The returned
+        ``accountId`` is used with the same trading endpoints
+        (``/accounts/{accountId}/orders`` etc).
+
+        Args:
+            issuance_id: Filter by issuance ID.
+            account_id: Filter by account ID.
+            spec_id: Filter by spec ID.
+            status: One of "active", "closed", "review_pending".
+            closure_reason: One of "max_drawdown_exceeded",
+                "max_daily_loss_exceeded", "admin_closure",
+                "manipulation_detected".
+            limit: Results per page.
+            offset: Pagination offset.
+
+        Returns:
+            List of issuance dicts. Each includes accountId, status,
+            startingBalance, and (when expanded) a ``spec`` with the
+            account-type rules.
+
+        Note:
+            Orders on a funded account are rejected until the trader has
+            passed KYC.
+        """
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if issuance_id:
+            params["issuanceId"] = issuance_id
+        if account_id:
+            params["accountId"] = account_id
+        if spec_id:
+            params["specId"] = spec_id
+        if status:
+            params["status"] = status
+        if closure_reason:
+            params["closureReason"] = closure_reason
+
+        return self._get("/book-account-issuances", params=params).get("data", [])
+
+    def get_book_account_issuance(self, issuance_id: str) -> dict:
+        """
+        Get a specific funded-account issuance.
+
+        Args:
+            issuance_id: The issuance ID.
+
+        Returns:
+            Issuance dict.
+        """
+        return self._get(f"/book-account-issuances/{issuance_id}")
 
     # ── Orders ──
 
