@@ -113,6 +113,68 @@ Response includes: status, total profit/loss, win rate, max drawdown, trading da
 
 ---
 
+## Funded Accounts (Auth Required)
+
+When a challenge passes, a separate **funded account** is provisioned for the trader. Funded accounts have a different lifecycle from challenge attempts. They earn real profit splits paid out periodically, require KYC, and are **not returned by** `GET /challenge-attempts`. List them via `GET /book-account-issuances` and use the returned `accountId` with the same trading endpoints (`/accounts/{accountId}/orders`, etc).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/book-account-issuances` | List your funded (b-book / a-book) accounts |
+| `GET` | `/book-account-issuances/{issuanceId}` | Get details for a single funded account |
+
+**Query params:** `userId`, `accountId`, `specId`, `status` (`active` / `closed` / `review_pending`), `closureReason`, `limit`, `offset`
+
+**Closure reasons:** `max_drawdown_exceeded`, `max_daily_loss_exceeded`, `admin_closure`, `manipulation_detected`
+
+### Account Types
+
+| Type | Stage | Endpoint | Notes |
+|------|-------|----------|-------|
+| `paper` | In challenge | `/challenge-attempts` | Simulated funds, challenge phase rules apply |
+| `b_book` | Funded | `/book-account-issuances` | Internal book, profit split paid out periodically |
+| `a_book` | Funded | `/book-account-issuances` | Hedged on Hyperliquid, same trader-facing API |
+
+### Find Your Tradeable accountId
+
+A bot should check both endpoints. The trader may be in a challenge, funded, or running both in parallel.
+
+```python
+def find_account_id(client):
+    """Return a tradeable accountId: funded first, then challenge."""
+    # 1. Funded accounts: real-money accounts after passing.
+    issuances = client.get("/book-account-issuances",
+                           params={"status": "active"}).json().get("data", [])
+    if issuances:
+        return issuances[0]["accountId"]
+
+    # 2. Active challenge attempts: paper accounts during evaluation.
+    attempts = client.get("/challenge-attempts",
+                          params={"status": "active"}).json().get("data", [])
+    if attempts:
+        return attempts[0]["accountId"]
+
+    raise Exception(
+        "No tradeable account. Purchase a challenge or wait for funding."
+    )
+```
+
+> **KYC gate:** orders on a funded account are rejected until the trader has passed KYC. Bots running on a freshly-funded account should expect an error response on order creation until the user completes verification at [app.propr.xyz/settings](https://app.propr.xyz/settings).
+
+> **Payouts:** profit on funded accounts is paid out via the payouts pipeline (USDC on-chain), processed periodically by Propr. The bot's tradeable balance is not the same as withdrawable balance. Treat `balance` as available trading capital, not cash you can withdraw.
+
+### What's Different on a Funded Account
+
+| Behavior | Paper (challenge) | Funded (b-book / a-book) |
+|----------|-------------------|--------------------------|
+| Source of funds | Simulated balance from challenge | Real capital allocated by Propr |
+| Failure rules | Phase rules (profit target, daily loss, drawdown) | Daily loss + max drawdown only. No profit target, no phase progression |
+| KYC | Not required | Required before any order |
+| Profit | Tracked but not withdrawable | Profit split paid out to a linked wallet |
+| Closure reasons | `max_drawdown_exceeded`, `max_daily_loss_exceeded`, `profit_target_not_met` | `max_drawdown_exceeded`, `max_daily_loss_exceeded`, `admin_closure`, `manipulation_detected` |
+| Account lifetime | Ends when phase passes or fails | Persists until admin / drawdown closes it |
+
+---
+
 ## Orders (Auth Required)
 
 All trading endpoints follow the pattern `/accounts/{accountId}/...` and require auth. You must own the account.

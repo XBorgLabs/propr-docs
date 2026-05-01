@@ -179,6 +179,50 @@ export interface ChallengeAttempt {
   currentPhase?: ChallengeAttemptPhase;
 }
 
+// ── Funded Accounts (book account issuances) ──
+
+export type AccountType = 'paper' | 'a_book' | 'b_book';
+export type BookAccountIssuanceStatus = 'active' | 'closed' | 'review_pending';
+export type BookAccountClosureReason =
+  | 'max_drawdown_exceeded'
+  | 'max_daily_loss_exceeded'
+  | 'admin_closure'
+  | 'manipulation_detected';
+export type DrawdownType = 'static' | 'trailing';
+
+export interface BookAccountSpec {
+  specId: string;
+  accountType: AccountType;
+  slug?: string;
+  initialBalance: string;
+  exchange: string;
+  currency: string;
+  maxDrawdownPercent: string;
+  maxDailyLossPercent: string;
+  drawdownType: DrawdownType;
+  systemSplitPercent: string;
+  userSplitPercent: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookAccountIssuance {
+  issuanceId: string;
+  accountId: string;
+  specId: string;
+  userId: string;
+  status: BookAccountIssuanceStatus;
+  closureReason: BookAccountClosureReason | null;
+  closureDetails: Record<string, any> | null;
+  closedBy: string | null;
+  startingBalance: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  spec?: BookAccountSpec;
+}
+
 export interface CreateOrderParams {
   side: 'buy' | 'sell';
   positionSide: 'long' | 'short';
@@ -315,11 +359,20 @@ export class ProprClient {
       return this.accountId;
     }
 
+    // Funded accounts take priority. Once a trader is funded, they
+    // typically trade through that account rather than a challenge.
+    const issuances = await this.getBookAccountIssuances({ status: 'active' });
+    if (issuances.length) {
+      this.accountId = issuances[0].accountId;
+      return this.accountId;
+    }
+
     const attempts = await this.getChallengeAttempts({ status: 'active' });
     if (!attempts.length) {
       throw new Error(
-        'No active challenge found. Purchase a challenge at ' +
-        'https://app.propr.xyz/dashboard first.'
+        'No tradeable account found. Purchase a challenge at ' +
+        'https://app.propr.xyz/dashboard, or wait for a funded account ' +
+        'to be issued after passing.'
       );
     }
     this.accountId = attempts[0].accountId;
@@ -379,6 +432,39 @@ export class ProprClient {
 
   async getChallengeAttempt(attemptId: string): Promise<ChallengeAttempt> {
     return this.get<ChallengeAttempt>(`/challenge-attempts/${attemptId}`);
+  }
+
+  // ── Funded Accounts (book account issuances) ──
+
+  /**
+   * List the caller's funded accounts (b_book / a_book). These are issued
+   * after passing a challenge and have a different lifecycle from
+   * challenge attempts. The returned `accountId` is used with the same
+   * trading endpoints (`/accounts/{accountId}/orders`, etc.).
+   *
+   * Note: orders on a funded account are rejected until the trader has
+   * passed KYC.
+   */
+  async getBookAccountIssuances(params: {
+    issuanceId?: string;
+    accountId?: string;
+    specId?: string;
+    status?: BookAccountIssuanceStatus;
+    closureReason?: BookAccountClosureReason;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<BookAccountIssuance[]> {
+    const res = await this.get<{ data: BookAccountIssuance[] }>(
+      '/book-account-issuances',
+      { limit: 20, offset: 0, ...params },
+    );
+    return res.data ?? [];
+  }
+
+  async getBookAccountIssuance(issuanceId: string): Promise<BookAccountIssuance> {
+    return this.get<BookAccountIssuance>(
+      `/book-account-issuances/${issuanceId}`,
+    );
   }
 
   // ── Orders ──
