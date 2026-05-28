@@ -28,6 +28,12 @@ from propr_sdk import ProprClient
 client = ProprClient()  # reads PROPR_API_KEY from .env
 client.setup()          # finds your active challenge account
 
+# Check account balance and equity
+account = client.get_account()
+print(f"Balance: ${account['balance']}")
+print(f"Available: ${account['availableBalance']}")
+print(f"Unrealized PnL: ${account['totalUnrealizedPnl']}")
+
 # Check your positions
 positions = client.get_open_positions()
 for p in positions:
@@ -78,6 +84,29 @@ client = ProprClient(
 | `client.get_challenge_attempts(status="active")` | Yes | List of attempt dicts |
 | `client.get_challenge_attempt(attempt_id)` | Yes | Single attempt dict |
 
+### Account
+
+| Method | Auth | Returns |
+|--------|------|---------|
+| `client.get_account()` | Yes | Account state dict with balance, equity, available funds, margin metrics |
+
+**Key fields returned:**
+- `balance`: Current account balance (USDC)
+- `availableBalance`: Funds available for new positions
+- `totalUnrealizedPnl`: Unrealized profit/loss across all positions
+- `marginBalance`: Total margin balance (balance + unrealized PnL)
+- `highWaterMark`: Highest balance achieved
+
+**Calculating equity:**
+```python
+account = client.get_account()
+equity = (
+    float(account['balance']) +
+    float(account['totalUnrealizedPnl']) +
+    float(account['isolatedPositionMargin'])
+)
+```
+
 ### Orders
 
 | Method | Description |
@@ -105,6 +134,15 @@ client = ProprClient(
 | `client.get_positions(base="BTC", status="open")` | List positions with filters |
 | `client.get_open_positions()` | Get all open non zero positions |
 | `client.get_open_positions(base="ETH")` | Get open positions for specific asset |
+
+**Note on mark prices:** Mark price (current market price) for an asset is included in the position dict as `markPrice`. To get the current mark price for an asset, you need an open position on that asset. There is currently no dedicated endpoint to fetch mark prices independently.
+
+```python
+positions = client.get_open_positions(base="BTC")
+if positions:
+    mark_price = float(positions[0]['markPrice'])
+    print(f"BTC mark price: ${mark_price:,.2f}")
+```
 
 ### Trades
 
