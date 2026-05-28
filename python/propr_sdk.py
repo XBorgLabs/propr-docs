@@ -262,6 +262,33 @@ class ProprClient:
         """
         return self._get(f"/challenge-attempts/{attempt_id}")
 
+    # ── Account ──
+
+    def get_account(self) -> dict:
+        """
+        Get current account state including balance, equity, and available funds.
+
+        Returns:
+            Account dict with:
+            - balance: Current account balance (USDC)
+            - availableBalance: Funds available for new positions
+            - totalUnrealizedPnl: Unrealized profit/loss across all positions
+            - marginBalance: Total margin balance (balance + unrealized PnL)
+            - crossPositionMargin: Margin used by cross positions
+            - crossOrderMargin: Margin reserved by cross orders
+            - isolatedPositionMargin: Margin used by isolated positions
+            - isolatedOrderMargin: Margin reserved by isolated orders
+            - totalMaintenanceMargin: Minimum margin to maintain positions
+            - totalInitialMargin: Initial margin required
+            - highWaterMark: Highest balance achieved
+            - and other account metrics
+
+        Note:
+            Equity = balance + totalUnrealizedPnl + isolatedPositionMargin
+            This represents your total account value.
+        """
+        return self._get(self._account_path(""))
+
     # ── Orders ──
 
     def get_orders(
